@@ -2,4 +2,4 @@ address: 'localhost:9443'
 binance_ws_url: 'wss://stream.binance.com:9443/stream'
 tickers:
   - 'btcusdt'
-  # - 'bnbbtc'
+  - 'bnbbtc'

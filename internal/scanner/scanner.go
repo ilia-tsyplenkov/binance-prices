@@ -20,30 +20,31 @@ const (
 )
 
 type Scanner struct {
-	conn    *websocket.Conn
-	ctx     context.Context
-	queue   chan models.DephMessage
-	tickers []string
+	connPool []*websocket.Conn
+	ctx      context.Context
+	queue    chan models.DephMessage
+	tickers  []string
 }
 
-func New(ctx context.Context, conn *websocket.Conn, queue chan models.DephMessage, tickers []string) *Scanner {
+func New(ctx context.Context, connPool []*websocket.Conn, queue chan models.DephMessage, tickers []string) *Scanner {
 
 	return &Scanner{
-		ctx:     ctx,
-		conn:    conn,
-		queue:   queue,
-		tickers: tickers,
+		ctx:      ctx,
+		connPool: connPool,
+		queue:    queue,
+		tickers:  tickers,
 	}
 }
 
 func (s *Scanner) Run() {
-	for _, ticker := range s.tickers {
-		go s.worker(ticker)
+	for i, ticker := range s.tickers {
+		go s.worker(s.connPool[i], ticker)
 	}
 }
 
-func (s *Scanner) worker(ticker string) {
-	if err := s.subscribe(ticker); err != nil {
+func (s *Scanner) worker(conn *websocket.Conn, ticker string) {
+	defer conn.Close()
+	if err := s.subscribe(conn, ticker); err != nil {
 		log.Errorf("subscribe: %s: %v", ticker, err)
 		return
 	}
@@ -53,7 +54,7 @@ func (s *Scanner) worker(ticker string) {
 		case <-s.ctx.Done():
 			return
 		default:
-			msgType, msgB, err := s.conn.ReadMessage()
+			msgType, msgB, err := conn.ReadMessage()
 			if err != nil {
 				log.Error(err)
 				break
@@ -79,7 +80,7 @@ func (s *Scanner) worker(ticker string) {
 	}
 }
 
-func (s *Scanner) subscribe(ticker string) error {
+func (s *Scanner) subscribe(conn *websocket.Conn, ticker string) error {
 	msg := &models.Subscribe{
 		ID:     uuid.New().String(),
 		Params: []string{fmt.Sprintf("%s@depth%s@%s", ticker, limit, ts)},
@@ -92,7 +93,7 @@ func (s *Scanner) subscribe(ticker string) error {
 		return err
 	}
 
-	if err := s.conn.WriteMessage(websocket.TextMessage, msgB); err != nil {
+	if err := conn.WriteMessage(websocket.TextMessage, msgB); err != nil {
 		return err
 	}
 

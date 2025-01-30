@@ -27,9 +27,13 @@ func main() {
 	}
 
 	log.Infof("config: %v", cfg)
-	conn, err := connectToBinance(cfg.BinanceWsURL)
-	if err != nil {
-		log.Fatal(err)
+	connectionPool := make([]*websocket.Conn, 0, len(cfg.Tickers))
+	for _ = range cfg.Tickers {
+		conn, err := connectToBinance(cfg.BinanceWsURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		connectionPool = append(connectionPool, conn)
 	}
 
 	queue := make(chan models.DephMessage, 10)
@@ -51,7 +55,7 @@ func main() {
 	priceStorage := storage.New(cfg.Tickers, queue)
 	binanceScanner := scanner.New(
 		ctx,
-		conn,
+		connectionPool,
 		queue,
 		cfg.Tickers,
 	)
